@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CHAINOVA</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#080810;color:#fff;
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  overflow:hidden;user-select:none;-webkit-user-select:none;
+}
+#wrap{width:min(430px,100vw);padding:8px;display:flex;flex-direction:column;gap:7px}
+
+/* Header */
+#hdr{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;
+  background:rgba(255,255,255,.05);
+  border-radius:14px;border:1px solid rgba(255,255,255,.08);
+}
+#logo{font-size:1.35em;font-weight:900;letter-spacing:3px;
+  background:linear-gradient(90deg,#ff2255,#cc33ff,#2277ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+#score-block{font-size:.82em;color:#aaa;margin-top:2px}
+#score-val{font-size:1.25em;font-weight:900;color:#33ff88;-webkit-text-fill-color:#33ff88}
+#lv-val{color:#cc33ff;font-size:.78em}
+#combo-disp{
+  font-size:1.9em;font-weight:900;color:#ffdd00;
+  text-shadow:0 0 18px #ffdd00,0 0 36px #ff8800;
+  min-width:90px;text-align:right;
+}
+
+/* Grid */
+#grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:5px;
+  padding:12px;
+  background:rgba(255,255,255,.025);
+  border-radius:18px;border:2px solid rgba(255,255,255,.07);
+  transition:border-color .4s,box-shadow .4s;
+}
+#grid.warn{border-color:rgba(255,140,0,.55);box-shadow:0 0 18px rgba(255,100,0,.15)}
+#grid.danger{border-color:rgba(255,30,30,.75);animation:danger-pulse .55s infinite alternate}
+@keyframes danger-pulse{to{box-shadow:0 0 40px rgba(255,0,0,.45)}}
+
+.tile{
+  aspect-ratio:1;border-radius:9px;cursor:pointer;border:none;outline:none;
+  display:flex;align-items:center;justify-content:center;font-size:1.05em;
+  transition:transform .1s,filter .1s;position:relative;
+}
+.tile:hover{transform:scale(1.09);filter:brightness(1.2)}
+.tile:active{transform:scale(.9)}
+
+.tile.r{background:#ff2255;box-shadow:0 2px 12px rgba(255,34,85,.55)}
+.tile.b{background:#2277ff;box-shadow:0 2px 12px rgba(34,119,255,.55)}
+.tile.g{background:#22ff77;box-shadow:0 2px 12px rgba(34,255,119,.55)}
+.tile.y{background:#ffdd00;box-shadow:0 2px 12px rgba(255,221,0,.55)}
+.tile.p{background:#cc33ff;box-shadow:0 2px 12px rgba(204,51,255,.55)}
+.tile.o{background:#ff8800;box-shadow:0 2px 12px rgba(255,136,0,.55)}
+
+.tile.wild{
+  background:linear-gradient(135deg,#ff2255,#ffdd00,#22ff77,#2277ff,#cc33ff);
+  box-shadow:0 0 18px rgba(255,255,255,.5);
+  animation:wild-hue 3s linear infinite;
+}
+@keyframes wild-hue{to{filter:hue-rotate(360deg)}}
+
+.tile.bomb{background:radial-gradient(circle,#ff9900,#ff3300);box-shadow:0 0 18px rgba(255,80,0,.8)}
+.tile.rainbow{
+  background:conic-gradient(#ff2255,#ffdd00,#22ff77,#2277ff,#cc33ff,#ff2255);
+  box-shadow:0 0 20px rgba(255,200,50,.65);
+  animation:rainbow-spin 2s linear infinite;
+}
+@keyframes rainbow-spin{to{transform:rotate(360deg)}}
+
+.tile.exploding{animation:tile-pop .32s forwards;pointer-events:none}
+@keyframes tile-pop{
+  0%{transform:scale(1);opacity:1;filter:brightness(1)}
+  35%{transform:scale(1.55);opacity:.9;filter:brightness(2.5)}
+  100%{transform:scale(0);opacity:0;filter:brightness(3)}
+}
+.tile.appear{animation:tile-in .3s cubic-bezier(.34,1.56,.64,1)}
+@keyframes tile-in{from{transform:scale(0) rotate(-90deg);opacity:0}}
+.tile.shake{animation:tile-shake .22s}
+@keyframes tile-shake{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-5px)}
+  75%{transform:translateX(5px)}
+}
+.tile.selected{
+  outline:3px solid rgba(255,255,255,.95);
+  outline-offset:-3px;
+  transform:scale(1.14)!important;
+  filter:brightness(1.6)!important;
+  z-index:10;
+  animation:sel-pulse .65s infinite alternate;
+}
+@keyframes sel-pulse{
+  from{box-shadow:0 0 0 4px rgba(255,255,255,.4)}
+  to{box-shadow:0 0 0 8px rgba(255,255,255,.1),0 0 20px rgba(255,255,255,.3)}
+}
+.tile.swapping{animation:tile-swap .2s ease-in-out}
+@keyframes tile-swap{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(.65);opacity:.5;filter:brightness(2)}
+}
+
+/* Footer */
+#footer{
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 14px;
+  background:rgba(255,255,255,.05);
+  border-radius:14px;border:1px solid rgba(255,255,255,.08);
+}
+#meter-row{display:flex;align-items:center;gap:8px}
+#meter-label{font-size:.7em;color:#777;white-space:nowrap}
+#meter-track{flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden}
+#meter-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#2277ff,#cc33ff,#ff2255);
+  border-radius:5px;transition:width .45s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 8px rgba(204,51,255,.4);
+}
+#meter-fill.full{background:linear-gradient(90deg,#ff8800,#ffdd00,#ff8800);animation:meter-fever .35s infinite alternate}
+@keyframes meter-fever{to{box-shadow:0 0 16px rgba(255,180,0,.8)}}
+
+#footer-row{display:flex;justify-content:space-between;align-items:center}
+#best-disp{font-size:.78em;color:#666}
+#best-val{color:#ffdd00;font-weight:bold}
+#retry-btn{
+  padding:7px 18px;
+  background:linear-gradient(135deg,#ff2255,#cc33ff);
+  border:none;border-radius:20px;color:#fff;font-weight:900;font-size:.82em;
+  cursor:pointer;letter-spacing:1px;
+  transition:transform .1s,box-shadow .2s;
+}
+#retry-btn:hover{transform:scale(1.06);box-shadow:0 4px 16px rgba(255,34,85,.5)}
+
+/* Overlays */
+.overlay{
+  position:fixed;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;padding:16px;
+}
+.glass{
+  background:rgba(6,6,18,.93);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:22px;padding:26px 22px;
+  width:100%;max-width:380px;text-align:center;
+  box-shadow:0 24px 64px rgba(0,0,0,.7);
+}
+
+/* Game Over */
+#go-ov{display:none;background:rgba(0,0,12,.88);backdrop-filter:blur(10px)}
+#go-title{font-size:2.2em;font-weight:900;color:#ff2255;letter-spacing:2px;margin-bottom:4px}
+#go-score{font-size:3.2em;font-weight:900;color:#33ff88}
+#go-newrec{
+  font-size:1.25em;font-weight:900;color:#ffdd00;
+  text-shadow:0 0 20px #ffdd00;display:none;
+  animation:rec-shake .5s ease-in-out;
+}
+@keyframes rec-shake{
+  0%,100%{transform:rotate(0) scale(1)}
+  25%{transform:rotate(-3deg) scale(1.05) translateX(-4px)}
+  75%{transform:rotate(3deg) scale(1.05) translateX(4px)}
+}
+#go-stats{display:flex;justify-content:space-around;margin:16px 0 10px}
+.stat-v{font-size:1.6em;font-weight:900;color:#cc33ff}
+.stat-l{font-size:.7em;color:#555;margin-top:3px}
+#go-taunt{color:#666;font-size:.82em;margin-bottom:16px;min-height:16px}
+#go-retry{
+  display:block;width:100%;padding:14px;
+  background:linear-gradient(135deg,#ff2255,#cc33ff);
+  border:none;border-radius:28px;color:#fff;
+  font-size:1.12em;font-weight:900;letter-spacing:2px;
+  cursor:pointer;box-shadow:0 6px 24px rgba(255,34,85,.45);
+  transition:transform .1s;margin-bottom:10px;
+}
+#go-retry:hover{transform:scale(1.03)}
+#go-share{
+  display:block;width:100%;padding:10px;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.18);border-radius:20px;
+  color:#aaa;font-size:.88em;cursor:pointer;
+  transition:background .2s;
+}
+#go-share:hover{background:rgba(255,255,255,.13)}
+
+/* Tutorial */
+#tut-ov{background:rgba(0,0,12,.94);backdrop-filter:blur(8px);cursor:pointer}
+#tut-title{font-size:1.65em;font-weight:900;color:#ffdd00;margin-bottom:18px}
+.tut-row{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:11px;padding:9px 13px;
+  background:rgba(255,255,255,.05);border-radius:10px;
+  text-align:left;font-size:.88em;line-height:1.45;color:#ccc;
+}
+.tut-ic{font-size:1.5em;flex-shrink:0}
+.tut-row strong{color:#33ff88}
+#tut-skip{color:#444;font-size:.75em;margin-top:18px}
+
+/* FX elements */
+#glow-ov{
+  position:fixed;inset:0;pointer-events:none;z-index:50;
+  opacity:0;transition:opacity .5s;border-radius:0;
+}
+#combo-pop{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%) scale(0);
+  font-size:5.5em;font-weight:900;
+  pointer-events:none;z-index:200;
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+  opacity:0;white-space:nowrap;text-shadow:0 0 40px currentColor;
+}
+#chain-pop{
+  position:fixed;top:36%;left:50%;
+  transform:translateX(-50%) scale(0);
+  font-size:2.6em;font-weight:900;
+  pointer-events:none;z-index:200;
+  opacity:0;text-align:center;
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+}
+#fever-wrap{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;z-index:300;opacity:0;
+  transition:opacity .2s;text-align:center;
+}
+#fever-txt{
+  font-size:4.2em;font-weight:900;color:#ff2255;letter-spacing:4px;
+  text-shadow:0 0 30px #ff2255,0 0 60px #ffdd00;
+  animation:fever-shk .1s infinite;
+}
+@keyframes fever-shk{
+  0%,100%{transform:translateX(0) rotate(-2deg)}
+  50%{transform:translateX(4px) rotate(2deg)}
+}
+#lc-banner{
+  position:fixed;top:18%;left:50%;transform:translateX(-50%);
+  font-size:1.35em;font-weight:900;color:#ff2255;
+  text-shadow:0 0 20px #ff2255;
+  z-index:200;pointer-events:none;
+  opacity:0;transition:opacity .3s;white-space:nowrap;
+}
+#notif{
+  position:fixed;bottom:22px;left:50%;
+  transform:translateX(-50%) translateY(80px);
+  background:rgba(16,16,36,.96);
+  border:1px solid rgba(255,255,255,.16);border-radius:20px;
+  padding:9px 20px;font-size:.83em;color:#bbb;
+  z-index:500;transition:transform .3s;pointer-events:none;white-space:nowrap;
+}
+#notif.show{transform:translateX(-50%) translateY(0)}
+
+/* Confetti */
+.conf{
+  position:fixed;border-radius:2px;z-index:400;
+  pointer-events:none;animation:conf-fall linear forwards;
+}
+@keyframes conf-fall{
+  0%{opacity:1;transform:translateY(-5vh) rotate(0deg)}
+  100%{opacity:0;transform:translateY(110vh) rotate(800deg)}
+}
+
+@media(max-height:680px){
+  #wrap{gap:4px}
+  .tile{border-radius:7px}
+}
+</style>
+</head>
+<body>
+
+<!-- FX -->
+<div id="glow-ov"></div>
+<div id="combo-pop"></div>
+<div id="chain-pop"></div>
+<div id="fever-wrap"><div id="fever-txt">🔥 FEVER!! 🔥</div></div>
+<div id="lc-banner">⚡ LAST CHANCE BONUS ×10!</div>
+<div id="notif"></div>
+
+<!-- Game -->
+<div id="wrap">
+  <div id="hdr">
+    <div>
+      <div id="logo">CHAINOVA</div>
+      <div id="score-block">SCORE:&nbsp;<span id="score-val">0</span>&nbsp;<span id="lv-val">Lv.1</span></div>
+    </div>
+    <div id="combo-disp">🔥×1</div>
+  </div>
+  <div id="grid"></div>
+  <div id="footer">
+    <div id="meter-row">
+      <span id="meter-label">連鎖メーター</span>
+      <div id="meter-track"><div id="meter-fill"></div></div>
+    </div>
+    <div id="footer-row">
+      <div id="best-disp">BEST:&nbsp;<span id="best-val">0</span></div>
+      <button id="retry-btn" onclick="newGame()">↺ RETRY</button>
+    </div>
+  </div>
+</div>
+
+<!-- Game Over -->
+<div id="go-ov" class="overlay">
+  <div class="glass">
+    <div id="go-title">GAME OVER</div>
+    <div id="go-score">0</div>
+    <div id="go-newrec">🏆 NEW RECORD!</div>
+    <div id="go-stats">
+      <div><div class="stat-v" id="go-chain">0</div><div class="stat-l">最大連鎖</div></div>
+      <div><div class="stat-v" id="go-combo">×1</div><div class="stat-l">最大コンボ</div></div>
+      <div><div class="stat-v" id="go-lv">Lv.1</div><div class="stat-l">到達レベル</div></div>
+    </div>
+    <div id="go-taunt"></div>
+    <button id="go-retry" onclick="newGame()">▶ RETRY</button>
+    <button id="go-share" onclick="shareResult()">📋 結果をシェア</button>
+  </div>
+</div>
+
+<!-- Tutorial -->
+<div id="tut-ov" class="overlay" onclick="closeTutorial()">
+  <div class="glass">
+    <div id="tut-title">🔥 CHAINOVA の遊び方</div>
+    <div class="tut-row"><span class="tut-ic">👆</span><span>タイルを選んで<strong>隣のタイルをタップ</strong>して入れ替え！</span></div>
+    <div class="tut-row"><span class="tut-ic">🎯</span><span>同じ色が<strong>3つ以上</strong>つながると爆発！</span></div>
+    <div class="tut-row"><span class="tut-ic">🔥</span><span>爆発が連鎖するほど<strong>コンボ倍率</strong>が爆増！</span></div>
+    <div class="tut-row"><span class="tut-ic">💥⚡🌈</span><span><strong>特殊タイル</strong>で大爆発を狙え！</span></div>
+    <div id="tut-skip">タップ / クリックでスキップ</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Constants ─────────────────────────────────────────────────────────
+const GRID      = 7;
+const COLORS    = ['r','b','g','y','p','o'];   // 6th color unlocks at Lv13
+const CHAIN_M   = [1, 3, 8, 20, 50, 100, 200, 400];
+const FEVER_D   = 6;   // 0-indexed depth → 7th chain
+const MAX_DEPTH = 18;
+const BASE_DELAY= 60;  // ms per tile in domino (capped dynamically)
+
+// ── State ─────────────────────────────────────────────────────────────
+const G = {
+  grid: [],          // [r][c] = {color,type,special} | null
+  score: 0,
+  best: +localStorage.getItem('cn_best') || 0,
+  combo: 0,
+  maxCombo: 0,
+  chainDepth: 0,
+  maxChain: 0,
+  level: 1,
+  totalChains: 0,
+  busy: false,
+  lcUsed: false,     // last-chance bonus used this move
+};
+
+// ── Audio ─────────────────────────────────────────────────────────────
+let AC = null;
+function initAudio() {
+  if (AC) return;
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+function osc(freq, type, vol, dur, startDelay=0) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type = type; o.frequency.value = freq;
+  const t = AC.currentTime + startDelay;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.start(t); o.stop(t + dur + 0.01);
+}
+function sndTrigger() {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type = 'sine'; o.frequency.value = 110;
+  o.frequency.exponentialRampToValueAtTime(60, AC.currentTime + 0.22);
+  g.gain.setValueAtTime(0.45, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.25);
+  o.start(); o.stop(AC.currentTime + 0.26);
+}
+function sndPop(idx) { osc(280 * Math.pow(1.059, idx % 24), 'square', 0.1, 0.11); }
+function sndChain(depth) {
+  const base = 200 * Math.pow(1.2, Math.min(depth, 8));
+  [1, 1.25, 1.5, 2, 2.5].slice(0, Math.min(depth+2, 5)).forEach((r,i) => {
+    osc(base*r, 'sine', 0.13, 0.65+i*0.08, i*0.04);
+  });
+}
+function sndFanfare() {
+  [523,659,784,1047].forEach((f,i) => osc(f,'sine',0.18,0.5,i*0.11));
+}
+
+// ── Tile factory ──────────────────────────────────────────────────────
+function numColors() { return G.level >= 13 ? 6 : 5; }
+function randColor() { const n = numColors(); return COLORS[Math.floor(Math.random()*n)]; }
+function mkNormal()  { return {color:randColor(), type:'normal', special:null}; }
+function mkSpecial() {
+  const kinds = ['wild','bomb','rainbow'];
+  return {color:randColor(), type:'special', special:kinds[Math.floor(Math.random()*3)]};
+}
+function specialChance() {
+  if (G.level < 4) return 0;
+  return Math.min(0.08 + (G.level-4)*0.015, 0.25);
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────
+function generateGrid() {
+  G.grid = Array.from({length:GRID}, () => Array.from({length:GRID}, mkNormal));
+}
+
+// ── BFS ───────────────────────────────────────────────────────────────
+function connects(a, b) {
+  if (!a || !b) return false;
+  const aw = a.type==='special' && a.special==='wild';
+  const bw = b.type==='special' && b.special==='wild';
+  return aw || bw || a.color === b.color;
+}
+function findGroup(sr, sc) {
+  const src = G.grid[sr][sc];
+  if (!src) return [];
+  const visited = new Uint8Array(GRID*GRID);
+  const q = [{r:sr,c:sc}], res = [{r:sr,c:sc}];
+  visited[sr*GRID+sc] = 1;
+  while (q.length) {
+    const {r,c} = q.shift();
+    for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr=r+dr, nc=c+dc;
+      if (nr<0||nr>=GRID||nc<0||nc>=GRID) continue;
+      const k=nr*GRID+nc;
+      if (visited[k]) continue;
+      const nb = G.grid[nr][nc];
+      if (!nb) continue;
+      if (connects(src, nb)) {
+        visited[k]=1; q.push({r:nr,c:nc}); res.push({r:nr,c:nc});
+      }
+    }
+  }
+  return res;
+}
+function findAllGroups() {
+  const visited = new Uint8Array(GRID*GRID), groups = [];
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    if (!G.grid[r][c] || visited[r*GRID+c]) continue;
+    const grp = findGroup(r,c);
+    grp.forEach(({r,c}) => visited[r*GRID+c]=1);
+    if (grp.length >= 3) groups.push(grp);
+  }
+  return groups;
+}
+function hasValidMove() {
+  // A valid move = any adjacent swap that creates a group of 3+
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    for (const [dr,dc] of [[0,1],[1,0]]) {
+      const nr=r+dr, nc=c+dc;
+      if (nr>=GRID||nc>=GRID) continue;
+      swapState(r,c,nr,nc);
+      const ok = findAllGroups().length > 0;
+      swapState(r,c,nr,nc);
+      if (ok) return true;
+    }
+  }
+  return false;
+}
+
+// ── Stuck ratio ───────────────────────────────────────────────────────
+function stuckRatio() {
+  const visited = new Uint8Array(GRID*GRID);
+  let stuck = 0;
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    if (!G.grid[r][c]||visited[r*GRID+c]) continue;
+    const grp = findGroup(r,c);
+    grp.forEach(({r,c}) => visited[r*GRID+c]=1);
+    if (grp.length < 3) stuck += grp.length;
+  }
+  return stuck / (GRID*GRID);
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const tEl= (r,c) => document.querySelector(`#grid .tile[data-r="${r}"][data-c="${c}"]`);
+
+function styleTile(el, cell) {
+  el.className = 'tile';
+  el.dataset.r = el.dataset.r; // preserve
+  el.dataset.c = el.dataset.c;
+  el.style.cssText = '';
+  if (!cell) { el.style.opacity='0'; el.style.pointerEvents='none'; return; }
+  el.style.opacity='1'; el.style.pointerEvents='';
+  if (cell.type==='special') {
+    el.classList.add(cell.special);
+    el.textContent = cell.special==='wild'?'⚡':cell.special==='bomb'?'💥':'🌈';
+  } else {
+    el.classList.add(cell.color);
+    el.textContent='';
+  }
+}
+
+function render() {
+  const g = $('grid');
+  g.innerHTML = '';
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    const btn = document.createElement('button');
+    btn.dataset.r = r; btn.dataset.c = c;
+    styleTile(btn, G.grid[r][c]);
+    g.appendChild(btn);
+  }
+}
+
+function rerenderAll(newKeys) {
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    const el = tEl(r,c); if (!el) continue;
+    const k = r*GRID+c;
+    const wasR = el.dataset.r, wasC = el.dataset.c;
+    styleTile(el, G.grid[r][c]);
+    el.dataset.r = wasR; el.dataset.c = wasC;
+    if (newKeys.has(k) && G.grid[r][c]) {
+      el.classList.add('appear');
+      setTimeout(() => el.classList.remove('appear'), 320);
+    }
+  }
+}
+
+// ── Display updates ───────────────────────────────────────────────────
+function updateHUD() {
+  $('score-val').textContent = G.score.toLocaleString();
+  $('lv-val').textContent    = `Lv.${G.level}`;
+  $('combo-disp').textContent= `🔥×${CHAIN_M[Math.min(G.combo, CHAIN_M.length-1)]}`;
+  $('best-val').textContent  = G.best.toLocaleString();
+  const pct = Math.min(G.totalChains / FEVER_D * 100, 100);
+  const mf = $('meter-fill');
+  mf.style.width = pct + '%';
+  mf.className = G.totalChains >= FEVER_D ? 'full' : '';
+  mf.id = 'meter-fill';
+}
+
+function updateWarning() {
+  const sr = stuckRatio();
+  const g = $('grid');
+  g.classList.remove('warn','danger');
+  if      (sr >= 0.9) g.classList.add('danger');
+  else if (sr >= 0.7) g.classList.add('warn');
+}
+
+// ── FX helpers ────────────────────────────────────────────────────────
+let _comboT, _chainT, _feverT, _lcT, _notifT;
+
+function showCombo(mult) {
+  const el = $('combo-pop');
+  const hues = [120,210,50,30,350,280];
+  el.style.color = `hsl(${hues[Math.min(Math.floor(Math.log2(mult)),hues.length-1)]},100%,65%)`;
+  el.textContent = `×${mult}`;
+  el.style.transform = 'translate(-50%,-50%) scale(1)';
+  el.style.opacity = '1';
+  clearTimeout(_comboT);
+  _comboT = setTimeout(() => { el.style.transform='translate(-50%,-50%) scale(1.35)'; el.style.opacity='0'; }, 600);
+}
+
+function showChainBadge(depth, count) {
+  if (depth < 1) return;
+  const el = $('chain-pop');
+  const colors = ['#33ff88','#2277ff','#ffdd00','#ff8800','#ff2255','#cc33ff','#ffffff'];
+  el.style.color = colors[Math.min(depth-1, colors.length-1)];
+  el.textContent = `${depth+1}連鎖！`;
+  el.style.transform = 'translateX(-50%) scale(1)';
+  el.style.opacity = '1';
+  clearTimeout(_chainT);
+  _chainT = setTimeout(() => { el.style.transform='translateX(-50%) scale(1.25)'; el.style.opacity='0'; }, 900);
+}
+
+function showFever() {
+  const el = $('fever-wrap');
+  el.style.opacity = '1';
+  clearTimeout(_feverT);
+  _feverT = setTimeout(() => el.style.opacity='0', 1600);
+}
+
+function applyGlow(depth) {
+  const el = $('glow-ov');
+  if (depth < 2) { el.style.opacity='0'; return; }
+  const hue = (depth * 50) % 360;
+  const str = Math.min(depth*0.07, 0.45);
+  el.style.boxShadow = `inset 0 0 ${depth*50}px hsla(${hue},100%,65%,${str})`;
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity='0', 700);
+}
+
+function showLC() {
+  const el = $('lc-banner');
+  el.style.opacity = '1';
+  clearTimeout(_lcT);
+  _lcT = setTimeout(() => el.style.opacity='0', 2400);
+}
+
+function notify(msg) {
+  const el = $('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_notifT);
+  _notifT = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function confetti() {
+  const cols = ['#ff2255','#2277ff','#22ff77','#ffdd00','#cc33ff','#ff8800'];
+  for (let i=0; i<75; i++) {
+    const d = document.createElement('div');
+    d.className='conf';
+    d.style.left = Math.random()*100+'vw';
+    d.style.background = cols[i%cols.length];
+    d.style.borderRadius = Math.random()>.5?'50%':'2px';
+    const sz = 5+Math.random()*7;
+    d.style.width=d.style.height=sz+'px';
+    d.style.animationDuration = (1.5+Math.random()*2.5)+'s';
+    d.style.animationDelay   = Math.random()*0.9+'s';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 5000);
+  }
+}
+
+// ── Collect cells to explode ──────────────────────────────────────────
+function collectCells(group) {
+  const set = new Set(group.map(({r,c})=>r*GRID+c));
+
+  // Bomb radius
+  for (const {r,c} of group) {
+    const cell = G.grid[r][c];
+    if (cell?.type==='special' && cell.special==='bomb') {
+      for (let dr=-2; dr<=2; dr++) for (let dc=-2; dc<=2; dc++) {
+        const nr=r+dr, nc=c+dc;
+        if (nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&G.grid[nr][nc]) set.add(nr*GRID+nc);
+      }
+    }
+  }
+
+  // Rainbow: explode most-common color on the board
+  const hasRainbow = group.some(({r,c}) => G.grid[r][c]?.special==='rainbow');
+  if (hasRainbow) {
+    const cnt = {};
+    for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++) {
+      const cl = G.grid[r][c];
+      if (cl?.color && cl.type!=='special') cnt[cl.color] = (cnt[cl.color]||0)+1;
+    }
+    const dom = Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    if (dom) for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++)
+      if (G.grid[r][c]?.color===dom) set.add(r*GRID+c);
+  }
+
+  return [...set].map(k=>({r:Math.floor(k/GRID), c:k%GRID}));
+}
+
+// ── Core explosion wave ───────────────────────────────────────────────
+function explodeWave(group, depth, done) {
+  if (depth >= MAX_DEPTH) { done(); return; }
+
+  G.chainDepth = depth;
+  if (depth > G.maxChain) G.maxChain = depth;
+  G.totalChains++;
+
+  // Score
+  const sr    = stuckRatio();
+  const isLC  = sr >= 0.9 && !G.lcUsed;
+  const mult  = CHAIN_M[Math.min(G.combo, CHAIN_M.length-1)];
+  const cells = collectCells(group);
+  let earned  = cells.length * 100 * mult * Math.pow(2, depth);
+  if (isLC && depth > 0) { earned *= 10; G.lcUsed = true; showLC(); }
+  G.score += Math.floor(earned);
+  G.combo++;
+  if (G.combo > G.maxCombo) G.maxCombo = G.combo;
+
+  updateHUD();
+  if (depth > 0) { showCombo(mult); showChainBadge(depth, cells.length); sndChain(depth); }
+  applyGlow(depth);
+  if (depth >= FEVER_D) { showFever(); sndFanfare(); }
+
+  // Sort domino from origin outward
+  const {r:or, c:oc} = group[0];
+  cells.sort((a,b) => (Math.abs(a.r-or)+Math.abs(a.c-oc)) - (Math.abs(b.r-or)+Math.abs(b.c-oc)));
+
+  const delay = Math.min(BASE_DELAY, Math.floor(500/cells.length));
+  let i = 0;
+
+  const popNext = () => {
+    if (i >= cells.length) {
+      // All animated — apply state then gravity+fill
+      setTimeout(() => {
+        applyGravityFill(() => {
+          const nextGroups = findAllGroups();
+          if (nextGroups.length > 0) {
+            const best = nextGroups.reduce((a,b) => b.length>a.length?b:a);
+            setTimeout(() => explodeWave(best, depth+1, done), 200);
+          } else {
+            done();
+          }
+        });
+      }, 120);
+      return;
+    }
+    const {r,c} = cells[i++];
+    const el = tEl(r,c);
+    if (el && G.grid[r][c]) {
+      G.grid[r][c] = null;
+      el.classList.add('exploding');
+      sndPop(i);
+      setTimeout(() => { el.style.opacity='0'; el.classList.remove('exploding'); }, 300);
+    }
+    setTimeout(popNext, delay);
+  };
+  popNext();
+}
+
+function applyGravityFill(cb) {
+  const newKeys = new Set();
+
+  // Gravity
+  for (let c=0; c<GRID; c++) {
+    let w = GRID-1;
+    for (let r=GRID-1; r>=0; r--) {
+      if (G.grid[r][c]) { G.grid[w][c]=G.grid[r][c]; if(w!==r) G.grid[r][c]=null; w--; }
+    }
+    // Fill empty from top
+    for (let r=0; r<=w; r++) {
+      const sc = specialChance();
+      G.grid[r][c] = Math.random()<sc ? mkSpecial() : mkNormal();
+      newKeys.add(r*GRID+c);
+    }
+  }
+
+  rerenderAll(newKeys);
+  setTimeout(cb, 310);
+}
+
+// ── Selection & Swap ──────────────────────────────────────────────────
+let selR = -1, selC = -1;
+
+function clearSelection() {
+  if (selR >= 0) {
+    const el = tEl(selR, selC);
+    if (el) el.classList.remove('selected');
+  }
+  selR = selC = -1;
+}
+
+function swapState(r1,c1,r2,c2) {
+  const tmp = G.grid[r1][c1];
+  G.grid[r1][c1] = G.grid[r2][c2];
+  G.grid[r2][c2] = tmp;
+}
+
+function attemptSwap(r1,c1,r2,c2) {
+  const e1 = tEl(r1,c1), e2 = tEl(r2,c2);
+
+  // Swap animation
+  if (e1) e1.classList.add('swapping');
+  if (e2) e2.classList.add('swapping');
+
+  setTimeout(() => {
+    swapState(r1,c1,r2,c2);
+    if (e1) { styleTile(e1, G.grid[r1][c1]); e1.classList.remove('swapping'); }
+    if (e2) { styleTile(e2, G.grid[r2][c2]); e2.classList.remove('swapping'); }
+
+    const groups = findAllGroups();
+    if (groups.length === 0) {
+      // No match — revert swap
+      setTimeout(() => {
+        swapState(r1,c1,r2,c2);
+        if (e1) { styleTile(e1, G.grid[r1][c1]); e1.classList.remove('swapping'); void e1.offsetWidth; e1.classList.add('shake'); }
+        if (e2) { styleTile(e2, G.grid[r2][c2]); e2.classList.remove('swapping'); void e2.offsetWidth; e2.classList.add('shake'); }
+      }, 180);
+      return;
+    }
+
+    // Match found → explode all groups
+    G.busy   = true;
+    G.combo  = 0;
+    G.lcUsed = false;
+    sndTrigger();
+
+    // Deduplicate and merge all matching cells
+    const seen = new Set();
+    const allCells = groups.flat().filter(({r,c}) => {
+      const k = r*GRID+c;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+
+    explodeWave(allCells, 0, () => {
+      G.busy = false;
+      updateWarning();
+      updateHUD();
+      checkLevel();
+      if (!hasValidMove()) setTimeout(gameOver, 450);
+    });
+  }, 180);
+}
+
+// ── Click handler ─────────────────────────────────────────────────────
+function handleClick(r, c) {
+  if (G.busy) return;
+  initAudio();
+  if (!G.grid[r][c]) return;
+
+  // No tile selected yet → select this tile
+  if (selR < 0) {
+    selR = r; selC = c;
+    const el = tEl(r,c);
+    if (el) el.classList.add('selected');
+    return;
+  }
+
+  // Same tile tapped again → deselect
+  if (selR === r && selC === c) {
+    clearSelection();
+    return;
+  }
+
+  const dr = Math.abs(r-selR), dc = Math.abs(c-selC);
+
+  // Not adjacent → move selection to new tile
+  if (dr+dc > 1) {
+    clearSelection();
+    selR = r; selC = c;
+    const el = tEl(r,c);
+    if (el) el.classList.add('selected');
+    return;
+  }
+
+  // Adjacent → attempt swap
+  const pr = selR, pc = selC;
+  clearSelection();
+  attemptSwap(pr, pc, r, c);
+}
+
+// ── Level ─────────────────────────────────────────────────────────────
+function checkLevel() {
+  const nv = Math.floor(G.score/5000)+1;
+  if (nv > G.level) { G.level = nv; notify(`🎉 レベル ${G.level} に上がった！`); }
+}
+
+// ── Game Over ─────────────────────────────────────────────────────────
+function gameOver() {
+  const isNew = G.score > G.best;
+  if (isNew) { G.best = G.score; localStorage.setItem('cn_best', G.best); confetti(); }
+
+  $('go-score').textContent  = G.score.toLocaleString();
+  $('go-chain').textContent  = G.maxChain ? `${G.maxChain+1}連鎖` : '1連鎖';
+  $('go-combo').textContent  = `×${CHAIN_M[Math.min(G.maxCombo-1, CHAIN_M.length-1)]}`;
+  $('go-lv').textContent     = `Lv.${G.level}`;
+  $('go-newrec').style.display = isNew ? 'block' : 'none';
+
+  const taunts = [
+    `あと${((Math.ceil((G.score+1)/1000)*1000)-G.score).toLocaleString()}点でキリ番だった…`,
+    'もう一回やれば絶対もっといける！',
+    `${G.maxChain+1}連鎖が最高だったか…`,
+    '惜しい！あと少しで大連鎖だった！'
+  ];
+  $('go-taunt').textContent = isNew ? '🏆 素晴らしい！新記録達成！' : taunts[G.totalChains%taunts.length];
+
+  $('go-ov').style.display = 'flex';
+  setTimeout(() => $('go-retry').focus(), 500);
+}
+
+// ── New Game ──────────────────────────────────────────────────────────
+function newGame() {
+  Object.assign(G, {score:0,combo:0,maxCombo:0,chainDepth:0,maxChain:0,
+    level:1,totalChains:0,busy:false,lcUsed:false});
+  clearSelection();
+  $('go-ov').style.display = 'none';
+  $('grid').classList.remove('warn','danger');
+  $('meter-fill').style.width = '0%';
+  $('fever-wrap').style.opacity = '0';
+  $('lc-banner').style.opacity = '0';
+  $('combo-pop').style.opacity = '0';
+  $('chain-pop').style.opacity = '0';
+  generateGrid();
+  render();
+  updateHUD();
+  updateWarning();
+}
+
+// ── Share ─────────────────────────────────────────────────────────────
+function shareResult() {
+  const m = CHAIN_M[Math.min(G.maxCombo-1, CHAIN_M.length-1)];
+  const txt = `🔥 CHAINOVA 🔥\nスコア: ${G.score.toLocaleString()}pt\n最大連鎖: ${G.maxChain+1}連鎖\nコンボ: ×${m}\n#CHAINOVA #パズルゲーム`;
+  navigator.clipboard?.writeText(txt)
+    .then(()=>notify('📋 クリップボードにコピーしました！'))
+    .catch(()=>notify('コピーできませんでした'));
+}
+
+// ── Tutorial ──────────────────────────────────────────────────────────
+function closeTutorial() {
+  localStorage.setItem('cn_tut','1');
+  $('tut-ov').style.display = 'none';
+}
+
+// ── Events ────────────────────────────────────────────────────────────
+(function initEvents() {
+  const g = $('grid');
+  const handler = e => {
+    e.preventDefault();
+    const t = e.target.closest('.tile');
+    if (t) handleClick(+t.dataset.r, +t.dataset.c);
+  };
+  g.addEventListener('click', handler);
+  g.addEventListener('touchend', handler, {passive:false});
+})();
+
+// ── Boot ──────────────────────────────────────────────────────────────
+newGame();
+if (!localStorage.getItem('cn_tut')) $('tut-ov').style.display = 'flex';
+else $('tut-ov').style.display = 'none';
+</script>
+</body>
+</html>
