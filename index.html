@@ -340,7 +340,7 @@ const GRID      = 7;
 const COLORS    = ['r','b','g','y','p','o'];   // 6th color unlocks at Lv13
 const CHAIN_M   = [1, 3, 8, 20, 50, 100, 200, 400];
 const FEVER_D   = 6;   // 0-indexed depth → 7th chain
-const MAX_DEPTH = 18;
+const MAX_DEPTH = 30;
 const BASE_DELAY= 60;  // ms per tile in domino (capped dynamically)
 
 // ── State ─────────────────────────────────────────────────────────────
@@ -399,6 +399,16 @@ function sndFanfare() {
 function numColors() { return G.level >= 13 ? 6 : 5; }
 function randColor() { const n = numColors(); return COLORS[Math.floor(Math.random()*n)]; }
 function mkNormal()  { return {color:randColor(), type:'normal', special:null}; }
+// グループを作らない色を選んでタイルを生成（補充時に自動連鎖を防ぐ）
+function mkNormalNoMatch(r, c) {
+  const n = numColors();
+  const pool = COLORS.slice(0, n).sort(() => Math.random() - .5);
+  for (const color of pool) {
+    G.grid[r][c] = {color, type:'normal', special:null};
+    if (findGroup(r, c).length < 3) return G.grid[r][c];
+  }
+  return {color: pool[0], type:'normal', special:null};
+}
 function mkSpecial() {
   const kinds = ['wild','bomb','rainbow'];
   return {color:randColor(), type:'special', special:kinds[Math.floor(Math.random()*3)]};
@@ -410,7 +420,9 @@ function specialChance() {
 
 // ── Grid ──────────────────────────────────────────────────────────────
 function generateGrid() {
-  G.grid = Array.from({length:GRID}, () => Array.from({length:GRID}, mkNormal));
+  G.grid = Array.from({length:GRID}, () => new Array(GRID).fill(null));
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++)
+    G.grid[r][c] = mkNormalNoMatch(r, c);
 }
 
 // ── BFS ───────────────────────────────────────────────────────────────
@@ -685,16 +697,19 @@ function explodeWave(group, depth, done) {
 
   const popNext = () => {
     if (i >= cells.length) {
-      // All animated — apply state then gravity+fill
+      // 全タイル爆発後: 重力落下 → 連鎖チェック → 新タイル補充
       setTimeout(() => {
-        applyGravityFill(() => {
-          const nextGroups = findAllGroups();
-          if (nextGroups.length > 0) {
-            const best = nextGroups.reduce((a,b) => b.length>a.length?b:a);
-            setTimeout(() => explodeWave(best, depth+1, done), 200);
-          } else {
-            done();
-          }
+        applyGravity(() => {
+          // 重力で落下したタイルだけが連鎖を起こせる（新タイルは連鎖しない）
+          const cascadeGroups = findAllGroups();
+          fillNewTiles(() => {
+            if (cascadeGroups.length > 0) {
+              const best = cascadeGroups.reduce((a,b) => b.length>a.length?b:a);
+              setTimeout(() => explodeWave(best, depth+1, done), 200);
+            } else {
+              done();
+            }
+          });
         });
       }, 120);
       return;
@@ -712,25 +727,33 @@ function explodeWave(group, depth, done) {
   popNext();
 }
 
-function applyGravityFill(cb) {
-  const newKeys = new Set();
-
-  // Gravity
+function applyGravity(cb) {
+  const moved = new Set();
   for (let c=0; c<GRID; c++) {
     let w = GRID-1;
     for (let r=GRID-1; r>=0; r--) {
-      if (G.grid[r][c]) { G.grid[w][c]=G.grid[r][c]; if(w!==r) G.grid[r][c]=null; w--; }
+      if (G.grid[r][c]) {
+        if (w !== r) { G.grid[w][c]=G.grid[r][c]; G.grid[r][c]=null; moved.add(w*GRID+c); }
+        w--;
+      }
     }
-    // Fill empty from top
-    for (let r=0; r<=w; r++) {
+  }
+  rerenderAll(moved);
+  setTimeout(cb, moved.size > 0 ? 220 : 0);
+}
+
+function fillNewTiles(cb) {
+  const newKeys = new Set();
+  for (let r=0; r<GRID; r++) for (let c=0; c<GRID; c++) {
+    if (!G.grid[r][c]) {
       const sc = specialChance();
-      G.grid[r][c] = Math.random()<sc ? mkSpecial() : mkNormal();
+      // 特殊タイルはそのまま、通常タイルは3連にならない色を選ぶ
+      G.grid[r][c] = Math.random()<sc ? mkSpecial() : mkNormalNoMatch(r, c);
       newKeys.add(r*GRID+c);
     }
   }
-
-  rerenderAll(newKeys);
-  setTimeout(cb, 310);
+  if (newKeys.size > 0) rerenderAll(newKeys);
+  setTimeout(cb, newKeys.size > 0 ? 280 : 0);
 }
 
 // ── Selection & Swap ──────────────────────────────────────────────────
